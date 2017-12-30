@@ -4,7 +4,7 @@ import time
 import numpy as np
 from torch.utils.data import DataLoader
 from utils import preprocess_data, timeSince
-from sift_grams import CBOWData, myCBOWNS
+from sift_grams import CBOWData, SiftGram
 
 USE_CUDA = True
 TIE_EMBEDDINGS = False #better not tie
@@ -19,8 +19,9 @@ embedding_save_pt = DATA_DIR + 'result/myWord2Vec/myCBOW.npz'
 embedding_dim = 50
 n_epochs = 50
 context_size = 5
-n_neg = 10
+n_neg = 3
 batch_size = 1024
+learning_rate = 0.005 #0.001 good
 
 if __name__ == '__main__':
 
@@ -31,10 +32,10 @@ if __name__ == '__main__':
     vocab_size = dataset.vocab_size
     wid_freq = dataset.w_freq
     losses = []
-    model = myCBOWNS(vocab_size, embedding_dim, n_neg, wid_freq, USE_CUDA, TIE_EMBEDDINGS, USE_WEIGHTS)
+    model = SiftGram(vocab_size, embedding_dim, n_neg, wid_freq, USE_CUDA, TIE_EMBEDDINGS, USE_WEIGHTS)
     if USE_CUDA:
         model = model.cuda()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     start_time = time.time()
     for epoch in range(n_epochs):
@@ -47,6 +48,9 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()       
             total_loss += loss.data
+            
+#            break
+#        break
             
         losses.append(total_loss[0])
         print('time cost: ' + timeSince(start_time))
