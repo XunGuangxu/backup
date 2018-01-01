@@ -18,8 +18,8 @@ w_freq_pt = DATA_DIR + 'result/myWord2Vec/w_freq.dat'
 embedding_save_pt = DATA_DIR + 'result/myWord2Vec/myCBOW.npz'
 embedding_dim = 50
 n_epochs = 50
-context_size = 5
-n_neg = 3
+context_size = 5 #one side only
+n_neg = 10
 batch_size = 1024
 learning_rate = 0.005 #0.001 good
 

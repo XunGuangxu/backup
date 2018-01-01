@@ -22,7 +22,7 @@ class SiftGram(nn.Module):
         self.TIE_EMBEDDINGS = TIE_EMBEDDINGS
         self.USE_WEIGHTS = USE_WEIGHTS
         
-        self.attn = Attention('self_tar', embedding_dim)
+        self.attn = Attention('mutual_gen', embedding_dim, self.n_neg)
     
     def forward(self, target_wids, context_wids):
         batch_size = len(target_wids)
@@ -41,15 +41,15 @@ class SiftGram(nn.Module):
 #        print(var_context_wids.size(), var_target_wids.size(), var_neg_wids.size())
             
 
-#        other_context_embeddings = self.o_embeddings(var_context_wids)
+        other_context_embeddings = self.o_embeddings(var_context_wids) #batch_size * context_size * embed_dim
         context_embeddings = self.i_embeddings(var_context_wids) #batch_size * context_size * embed_dim
 #        avg_ctxt_embeddings = context_embeddings.mean(dim=1).unsqueeze(2) #batch_size * embed_dim * 1
         target_embeddings = self.o_embeddings(var_target_wids).unsqueeze(1) #batch_size * 1 * embed_dim
         neg_embeddings = self.o_embeddings(var_neg_wids) #batch_size * n_neg * embed_dim
         
 #        print(context_embeddings.size(), avg_ctxt_embeddings.size(), target_embeddings.size(), neg_embeddings.size())
-        attn_weights = self.attn(target_embeddings)
-        attn_ctxt_embeddings = torch.bmm(attn_weights, context_embeddings).view(batch_size, -1, 1)
+        attn_weights = self.attn(batch_size, target_embeddings, context_embeddings, other_context_embeddings) #batch_size * 1 * context_size
+        attn_ctxt_embeddings = torch.bmm(attn_weights, context_embeddings).view(batch_size, -1, 1) #batch_size * embed_dim * 1
 #        print(attn_weights.size(), attn_ctxt_embeddings.size())
         
 #        pos_loss = torch.bmm(target_embeddings, avg_ctxt_embeddings).sigmoid().log().sum()
@@ -61,25 +61,46 @@ class SiftGram(nn.Module):
     
 
 class Attention(nn.Module):
-    def __init__(self, mode, embedding_dim):
+    def __init__(self, mode, embedding_dim, n_neg, context_size=10):
         super(Attention, self).__init__()
         self.mode = mode
         
         if self.mode == 'self_tar':
             self.layer1 = nn.Linear(embedding_dim, 20)
-            self.layer2 = nn.Linear(20, 10)
+            self.layer2 = nn.Linear(20, context_size)
         
         if self.mode == 'self_con':
-            pass
+            self.layer1 = nn.Linear(embedding_dim * context_size, 30)
+            self.layer2 = nn.Linear(30, context_size)
         
         if self.mode == 'mutual_gen':
-            pass
+            self.layer1 = nn.Linear(embedding_dim, embedding_dim)
         
-    def forward(self, target_embeddings):
+    def forward(self, batch_size, target_embeddings, context_embeddings, other_context_embeddings):
+#        print('this')
+#        print(target_embeddings.size(), other_context_embeddings.size())
         if self.mode == 'self_tar':
             x = F.tanh(self.layer1(target_embeddings))
             x = F.softmax(self.layer2(x))
+            print(x[1], x[1].sum())
+            print('normalization dimension wrong here')
             return x
+        if self.mode == 'self_con':
+            x = F.tanh(self.layer1(context_embeddings.view(batch_size, -1)))
+            x = F.softmax(self.layer2(x))
+            return x.unsqueeze(1)
+        if self.mode == 'mutual_dot':
+            x = torch.bmm(target_embeddings, torch.transpose(other_context_embeddings, 1, 2)).squeeze()
+            x =  F.softmax(x)
+#            print(x.unsqueeze(1)[1], x.unsqueeze(1)[1].sum())
+            return x.unsqueeze(1)
+        if self.mode == 'mutual_gen':
+            x = self.layer1(target_embeddings)
+#            print(x.size())
+            x = torch.bmm(x, torch.transpose(other_context_embeddings, 1, 2)).squeeze()
+            x =  F.softmax(x)
+#            print(x.unsqueeze(1)[1], x.unsqueeze(1)[1].sum())
+            return x.unsqueeze(1)
 
     
 class CBOWData(Dataset):
