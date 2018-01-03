@@ -22,6 +22,8 @@ context_size = 5 #one side only
 n_neg = 10
 batch_size = 1024
 learning_rate = 0.005 #0.001 good
+att_mode = 'self_con'
+use_att_threshold = 0.5
 
 if __name__ == '__main__':
 
@@ -32,7 +34,7 @@ if __name__ == '__main__':
     vocab_size = dataset.vocab_size
     wid_freq = dataset.w_freq
     losses = []
-    model = SiftGram(vocab_size, embedding_dim, n_neg, wid_freq, USE_CUDA, TIE_EMBEDDINGS, USE_WEIGHTS)
+    model = SiftGram(vocab_size, embedding_dim, n_neg, wid_freq, USE_CUDA, TIE_EMBEDDINGS, USE_WEIGHTS, att_mode)
     if USE_CUDA:
         model = model.cuda()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -44,7 +46,7 @@ if __name__ == '__main__':
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         for batchid, (target_wid, context_wids) in enumerate(dataloader):
             model.zero_grad()
-            loss = model(target_wid, torch.stack(context_wids, dim=1))
+            loss = model(target_wid, torch.stack(context_wids, dim=1), use_att_threshold)
             loss.backward()
             optimizer.step()       
             total_loss += loss.data

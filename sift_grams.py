@@ -8,7 +8,7 @@ from torch.autograd import Variable
 from torch.utils.data import Dataset
 
 class SiftGram(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, n_neg, wid_freq, USE_CUDA, TIE_EMBEDDINGS, USE_WEIGHTS):
+    def __init__(self, vocab_size, embedding_dim, n_neg, wid_freq, USE_CUDA, TIE_EMBEDDINGS, USE_WEIGHTS, att_mode):
         super(SiftGram, self).__init__()
         self.i_embeddings = nn.Embedding(vocab_size + 1, embedding_dim) # one more for padding
         self.o_embeddings = nn.Embedding(vocab_size + 1, embedding_dim) # one more for padding
@@ -21,11 +21,10 @@ class SiftGram(nn.Module):
         self.sampling_weights = torch.FloatTensor(wf)
         self.USE_CUDA = USE_CUDA
         self.TIE_EMBEDDINGS = TIE_EMBEDDINGS
-        self.USE_WEIGHTS = USE_WEIGHTS
-        
-        self.attn = Attention('self_con', embedding_dim, self.n_neg)
+        self.USE_WEIGHTS = USE_WEIGHTS        
+        self.attn = Attention(att_mode, embedding_dim, self.n_neg)
     
-    def forward(self, target_wids, context_wids):
+    def forward(self, target_wids, context_wids, use_att_threshold):
         batch_size = len(target_wids)
         
         var_context_wids = Variable(context_wids)
@@ -48,7 +47,7 @@ class SiftGram(nn.Module):
         target_embeddings = self.o_embeddings(var_target_wids).unsqueeze(1) #batch_size * 1 * embed_dim
         neg_embeddings = self.o_embeddings(var_neg_wids) #batch_size * n_neg * embed_dim
         
-        use_attn = random.random() < 10.5
+        use_attn = random.random() < use_att_threshold
         if use_attn:
 #           print(context_embeddings.size(), avg_ctxt_embeddings.size(), target_embeddings.size(), neg_embeddings.size())
             attn_weights = self.attn(batch_size, target_embeddings, context_embeddings, other_context_embeddings) #batch_size * 1 * context_size
