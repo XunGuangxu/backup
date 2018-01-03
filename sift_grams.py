@@ -1,5 +1,6 @@
 import torch
 import pickle
+import random
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,7 +23,7 @@ class SiftGram(nn.Module):
         self.TIE_EMBEDDINGS = TIE_EMBEDDINGS
         self.USE_WEIGHTS = USE_WEIGHTS
         
-        self.attn = Attention('mutual_gen', embedding_dim, self.n_neg)
+        self.attn = Attention('self_con', embedding_dim, self.n_neg)
     
     def forward(self, target_wids, context_wids):
         batch_size = len(target_wids)
@@ -40,22 +41,27 @@ class SiftGram(nn.Module):
             
 #        print(var_context_wids.size(), var_target_wids.size(), var_neg_wids.size())
             
+        
 
         other_context_embeddings = self.o_embeddings(var_context_wids) #batch_size * context_size * embed_dim
         context_embeddings = self.i_embeddings(var_context_wids) #batch_size * context_size * embed_dim
-#        avg_ctxt_embeddings = context_embeddings.mean(dim=1).unsqueeze(2) #batch_size * embed_dim * 1
         target_embeddings = self.o_embeddings(var_target_wids).unsqueeze(1) #batch_size * 1 * embed_dim
         neg_embeddings = self.o_embeddings(var_neg_wids) #batch_size * n_neg * embed_dim
         
-#        print(context_embeddings.size(), avg_ctxt_embeddings.size(), target_embeddings.size(), neg_embeddings.size())
-        attn_weights = self.attn(batch_size, target_embeddings, context_embeddings, other_context_embeddings) #batch_size * 1 * context_size
-        attn_ctxt_embeddings = torch.bmm(attn_weights, context_embeddings).view(batch_size, -1, 1) #batch_size * embed_dim * 1
-#        print(attn_weights.size(), attn_ctxt_embeddings.size())
+        use_attn = random.random() < 10.5
+        if use_attn:
+#           print(context_embeddings.size(), avg_ctxt_embeddings.size(), target_embeddings.size(), neg_embeddings.size())
+            attn_weights = self.attn(batch_size, target_embeddings, context_embeddings, other_context_embeddings) #batch_size * 1 * context_size
+            attn_ctxt_embeddings = torch.bmm(attn_weights, context_embeddings).view(batch_size, -1, 1) #batch_size * embed_dim * 1
+#           print(attn_weights.size(), attn_ctxt_embeddings.size())
+            pos_loss = torch.bmm(target_embeddings, attn_ctxt_embeddings).sigmoid().log().sum()
+            neg_loss = torch.bmm(neg_embeddings.neg(), attn_ctxt_embeddings).sigmoid().log().sum()
         
-#        pos_loss = torch.bmm(target_embeddings, avg_ctxt_embeddings).sigmoid().log().sum()
-#        neg_loss = torch.bmm(neg_embeddings.neg(), avg_ctxt_embeddings).sigmoid().log().sum()
-        pos_loss = torch.bmm(target_embeddings, attn_ctxt_embeddings).sigmoid().log().sum()
-        neg_loss = torch.bmm(neg_embeddings.neg(), attn_ctxt_embeddings).sigmoid().log().sum()
+        else:
+            avg_ctxt_embeddings = context_embeddings.mean(dim=1).unsqueeze(2) #batch_size * embed_dim * 1
+        
+            pos_loss = torch.bmm(target_embeddings, avg_ctxt_embeddings).sigmoid().log().sum()
+            neg_loss = torch.bmm(neg_embeddings.neg(), avg_ctxt_embeddings).sigmoid().log().sum()
         
         return -(pos_loss + neg_loss)
     
@@ -70,8 +76,8 @@ class Attention(nn.Module):
             self.layer2 = nn.Linear(20, context_size)
         
         if self.mode == 'self_con':
-            self.layer1 = nn.Linear(embedding_dim * context_size, 30)
-            self.layer2 = nn.Linear(30, context_size)
+            self.layer1 = nn.Linear(embedding_dim * context_size, 50)
+            self.layer2 = nn.Linear(50, context_size)
         
         if self.mode == 'mutual_gen':
             self.layer1 = nn.Linear(embedding_dim, embedding_dim)
